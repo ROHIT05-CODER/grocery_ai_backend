@@ -8,13 +8,28 @@ import smtplib, os
 app = Flask(__name__)
 CORS(app)
 
-# Load dataset
-df = pd.read_excel("grocery_dataset_extended.xlsx")
+# Load dataset safely
+try:
+    df = pd.read_excel("grocery_dataset_extended.xlsx")
+    print("✅ Dataset loaded:", len(df), "rows")
+    print("📌 Columns:", df.columns.tolist())
+except Exception as e:
+    print("❌ Error loading dataset:", e)
+    df = pd.DataFrame()
 
 @app.route("/api/items", methods=["GET"])
 def get_items():
-    query = request.args.get("q", "").lower()
-    results = df[df["Item Name"].str.lower().str.contains(query)]
+    query = request.args.get("q", "").lower().strip()
+    print("🔎 Query:", query)
+
+    if df.empty:
+        return jsonify([])
+
+    if "Item Name" not in df.columns:
+        return jsonify({"error": "Column 'Item Name' not found in dataset"}), 500
+
+    results = df[df["Item Name"].astype(str).str.lower().str.contains(query, na=False)]
+    print("✅ Found:", len(results), "items")
     return results.to_json(orient="records")
 
 @app.route("/api/order", methods=["POST"])
