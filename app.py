@@ -8,7 +8,8 @@ import smtplib, os
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})  # only for /api routes
+CORS(app, resources={r"/api/*": {"origins": "https://grocery-ai-assistant.vercel.app"}})
+
 
 # Load dataset
 try:
