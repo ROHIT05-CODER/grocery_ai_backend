@@ -4,14 +4,15 @@ from dotenv import load_dotenv
 import pandas as pd
 import smtplib, os
 
-# Load env
+# Load environment variables (useful for local testing)
 load_dotenv()
 
 app = Flask(__name__)
+
+# 🔑 CORS setup: allow requests from your Vercel frontend
 CORS(app, resources={r"/api/*": {"origins": "https://grocery-ai-assistant.vercel.app"}})
 
-
-# Load dataset
+# 📊 Load dataset
 try:
     df = pd.read_excel("grocery_dataset_extended.xlsx")
     print("✅ Dataset loaded:", len(df), "rows")
@@ -20,7 +21,7 @@ except Exception as e:
     print("❌ Error loading dataset:", e)
     df = pd.DataFrame()
 
-# 🔎 Items search
+# 🔎 Search items endpoint
 @app.route("/api/items", methods=["GET"])
 def get_items():
     query = request.args.get("q", "").lower().strip()
@@ -33,7 +34,7 @@ def get_items():
     print("✅ Found:", len(results), "items")
     return jsonify(results.to_dict(orient="records"))
 
-# 🛒 Place order
+# 🛒 Place order endpoint
 @app.route("/api/order", methods=["POST"])
 def place_order():
     data = request.json or {}
@@ -44,6 +45,7 @@ def place_order():
     if not recipient or not sender or not password:
         return jsonify({"error": "Email credentials not configured"}), 500
 
+    # Prepare the email
     message = f"Subject: Grocery Order\n\nOrder Details:\n{data}"
 
     try:
@@ -51,11 +53,14 @@ def place_order():
             server.starttls()
             server.login(sender, password)
             server.sendmail(sender, recipient, message)
+        print("✅ Order email sent successfully!")
     except Exception as e:
         print("❌ Email error:", e)
         return jsonify({"error": str(e)}), 500
 
     return jsonify({"status": "Order placed successfully!"})
 
+# 🌐 Run server
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    # Use host=0.0.0.0 for Render deployment
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
