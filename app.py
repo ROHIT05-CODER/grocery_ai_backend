@@ -5,14 +5,14 @@ import pandas as pd
 import smtplib, os
 from email.mime.text import MIMEText
 
-# Load environment variables
+# 🔑 Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
 
-# ✅ Allow frontend (Vercel) to access backend (Render)
-# First test with wildcard. If working, then replace "*" with your vercel domain.
-CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
+# 🌐 CORS setup (frontend <-> backend communication allow)
+# First try specific domain, if still blocked, change to "*" (all origins)
+CORS(app, resources={r"/api/*": {"origins": ["https://grocery-ai-assistant.vercel.app"]}})
 
 # 📊 Load dataset
 try:
@@ -23,7 +23,7 @@ except Exception as e:
     print("❌ Error loading dataset:", e)
     df = pd.DataFrame()
 
-# 📧 Send Email helper
+# 📧 Email helper
 def send_email(subject, body):
     try:
         sender = os.environ.get("SENDER_EMAIL")
@@ -92,4 +92,5 @@ def place_order():
 
 # 🌐 Run server
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
