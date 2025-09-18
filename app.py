@@ -10,8 +10,9 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# 🔑 Allow frontend (Vercel) to access backend (Render)
-CORS(app, resources={r"/api/*": {"origins": "https://grocery-ai-assistant.vercel.app"}})
+# ✅ Allow frontend (Vercel) to access backend (Render)
+# First test with wildcard. If working, then replace "*" with your vercel domain.
+CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
 # 📊 Load dataset
 try:
