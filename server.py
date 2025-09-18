@@ -1,8 +1,12 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import os
 import google.generativeai as genai
 
 app = Flask(__name__)
+
+# Enable CORS (allow frontend domain)
+CORS(app, resources={r"/*": {"origins": "https://grocery-ai-assistant.vercel.app"}})
 
 # Configure Gemini
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
