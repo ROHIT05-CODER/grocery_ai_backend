@@ -2,8 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 import pandas as pd
-import smtplib, os
-from email.mime.text import MIMEText
+import os, requests
 
 # 🔑 Load environment variables
 load_dotenv()
@@ -11,7 +10,6 @@ load_dotenv()
 app = Flask(__name__)
 
 # 🌐 CORS setup (frontend <-> backend communication allow)
-# First try specific domain, if still blocked, change to "*" (all origins)
 CORS(app, resources={r"/api/*": {"origins": ["https://grocery-ai-assistant.vercel.app"]}})
 
 # 📊 Load dataset
@@ -23,31 +21,24 @@ except Exception as e:
     print("❌ Error loading dataset:", e)
     df = pd.DataFrame()
 
-# 📧 Email helper
-def send_email(subject, body):
+# 📲 Telegram helper
+def send_telegram_message(text):
     try:
-        sender = os.environ.get("SENDER_EMAIL")
-        password = os.environ.get("SENDER_PASSWORD")
-        recipient = os.environ.get("RECIPIENT_EMAIL")
+        bot_token = os.environ.get("TELEGRAM_BOT_TOKEN") or "7555331559:AAGrS9Fs6XXByeWrTMZo36U5i8MAOAlI4NM"
+        chat_id = os.environ.get("TELEGRAM_CHAT_ID") or "6292181293"
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
 
-        if not sender or not password or not recipient:
-            print("❌ Email credentials missing in .env")
+        payload = {"chat_id": chat_id, "text": text}
+        r = requests.post(url, json=payload)
+
+        if r.status_code == 200:
+            print("✅ Telegram message sent")
+            return True
+        else:
+            print("❌ Telegram error:", r.text)
             return False
-
-        msg = MIMEText(body, "plain")
-        msg["Subject"] = subject
-        msg["From"] = sender
-        msg["To"] = recipient
-
-        with smtplib.SMTP("smtp.gmail.com", 587) as server:
-            server.starttls()
-            server.login(sender, password)
-            server.sendmail(sender, recipient, msg.as_string())
-
-        print("✅ Email sent successfully")
-        return True
     except Exception as e:
-        print("❌ Email error:", e)
+        print("❌ Telegram exception:", e)
         return False
 
 # 🔎 Search items
@@ -63,7 +54,7 @@ def get_items():
     print("✅ Found:", len(results), "items")
     return jsonify(results.to_dict(orient="records"))
 
-# 🛒 Place order (log + email)
+# 🛒 Place order (log + telegram only)
 @app.route("/api/order", methods=["POST"])
 def place_order():
     data = request.json or {}
@@ -77,14 +68,14 @@ def place_order():
 
         # Format order text
         order_text = "\n".join([f"{i['item']} - {i['quantity']}" for i in data.get("items", [])])
-        body = f"New order from {data.get('customer', 'Unknown')}:\n\n{order_text}"
+        body = f"🛒 New order from {data.get('customer', 'Unknown')}:\n\n{order_text}"
 
-        # Send email to shop owner
-        email_status = send_email("🛒 New Grocery Order", body)
+        # Send Telegram
+        telegram_status = send_telegram_message(body)
 
         return jsonify({
             "status": "✅ Order received",
-            "email": "sent" if email_status else "failed"
+            "telegram": "sent" if telegram_status else "failed"
         })
     except Exception as e:
         print("❌ Order error:", e)
