@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import pandas as pd
-import os, requests, time, random
+import os, requests, time, random, re
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": ["https://grocery-ai-assistant.vercel.app"]}})
@@ -42,10 +42,33 @@ def get_items():
     results = df[df["Item Name"].astype(str).str.lower().str.contains(query, na=False)]
     return jsonify(results.to_dict(orient="records"))
 
-# 🛒 Place order
+# 🛒 Place order with validation
 @app.route("/api/order", methods=["POST"])
 def place_order():
     data = request.json or {}
+
+    # Validate required fields
+    customer = data.get("customer", "").strip()
+    phone = data.get("phone", "").strip()
+    address = data.get("address", "").strip()
+    items = data.get("items", [])
+
+    if not customer:
+        return jsonify({"error": "Customer name is required"}), 400
+    if not phone:
+        return jsonify({"error": "Phone number is required"}), 400
+    if not address:
+        return jsonify({"error": "Address is required"}), 400
+    if not items:
+        return jsonify({"error": "At least one item must be ordered"}), 400
+
+    # Flexible phone validation (+91XXXXXXXXXX or 10 digits)
+    if not re.match(r"^(\+91)?\d{10}$", phone):
+        return jsonify({"error": "Invalid phone format. Use +911234567890 or 1234567890"}), 400
+
+    # Normalize phone to +91XXXXXXXXXX
+    phone = "+91" + phone[-10:]
+
     try:
         order_id = f"ORD{int(time.time())}{random.randint(100,999)}"
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -53,26 +76,26 @@ def place_order():
         order_lines = []
         total_price = 0.0
 
-        for i in data.get("items", []):
-            item = i.get("item")
+        for i in items:
+            item_name = i.get("item")
             qty = float(i.get("quantity", 1))
             price = 0.0
 
             # Match with dataset for price
             if not df.empty and "Item Name" in df.columns and "Price (₹)" in df.columns:
-                match = df[df["Item Name"].astype(str).str.lower() == str(item).lower()]
+                match = df[df["Item Name"].astype(str).str.lower() == str(item_name).lower()]
                 if not match.empty:
                     price = float(match.iloc[0]["Price (₹)"])
 
             line_total = price * qty
             total_price += line_total
-            order_lines.append(f"{item} - {qty} x ₹{price} = ₹{line_total}")
+            order_lines.append(f"{item_name} - {qty} x ₹{price} = ₹{line_total}")
 
         body = f"""🛒 New Order Received!
 🆔 Order ID: {order_id}
-👤 Customer: {data.get('customer','Unknown')}
-📞 Phone: {data.get('phone','N/A')}
-📍 Address: {data.get('address','N/A')}
+👤 Customer: {customer}
+📞 Phone: {phone}
+📍 Address: {address}
 ⏰ Time: {timestamp}
 
 {chr(10).join(order_lines)}
@@ -84,7 +107,12 @@ def place_order():
 
         telegram_status = send_telegram_message(body)
 
-        return jsonify({"status": "✅ Order received", "total": total_price, "telegram": "sent" if telegram_status else "failed"})
+        return jsonify({
+            "status": "✅ Order received",
+            "total": total_price,
+            "telegram": "sent" if telegram_status else "failed"
+        })
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -92,4 +120,4 @@ def place_order():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     print(f"🚀 Running on port {port}")
-    app.run(host="0.0.0.0", port=port) 
+    app.run(host="0.0.0.0", port=port)
