@@ -24,8 +24,8 @@ except Exception as e:
 # 📲 Telegram helper
 def send_telegram_message(text):
     try:
-        bot_token = os.environ.get("TELEGRAM_BOT_TOKEN") or "7555331559:AAGrS9Fs6XXByeWrTMZo36U5i8MAOAlI4NM"
-        chat_id = os.environ.get("TELEGRAM_CHAT_ID") or "6292181293"
+        bot_token = os.environ.get("TELEGRAM_BOT_TOKEN") 
+        chat_id = os.environ.get("TELEGRAM_CHAT_ID") 
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
 
         payload = {"chat_id": chat_id, "text": text}
