@@ -1,8 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import pandas as pd
-import os, requests
-from datetime import datetime
+import os, requests, time, random
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": ["https://grocery-ai-assistant.vercel.app"]}})
@@ -23,7 +22,6 @@ def send_telegram_message(text):
     if not bot_token or not chat_id:
         print("❌ Missing Telegram credentials")
         return False
-    
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     try:
         r = requests.post(url, json={"chat_id": chat_id, "text": text})
@@ -43,54 +41,49 @@ def get_items():
     results = df[df["Item Name"].astype(str).str.lower().str.contains(query, na=False)]
     return jsonify(results.to_dict(orient="records"))
 
-# 🛒 Place order (log + telegram with details)
+# 🛒 Place order
 @app.route("/api/order", methods=["POST"])
 def place_order():
     data = request.json or {}
     try:
-        # Save to log
+        order_id = f"ORD{int(time.time())}{random.randint(100,999)}"
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+
+        order_lines = []
+        total_price = 0.0
+
+        for i in data.get("items", []):
+            item = i.get("item")
+            qty = float(i.get("quantity", 1))
+            price = 0.0
+
+            # Match with dataset for price
+            if not df.empty and "Item Name" in df.columns and "Price" in df.columns:
+                match = df[df["Item Name"].astype(str).str.lower() == str(item).lower()]
+                if not match.empty:
+                    price = float(match.iloc[0]["Price"])
+
+            line_total = price * qty
+            total_price += line_total
+            order_lines.append(f"{item} - {qty} x ₹{price} = ₹{line_total}")
+
+        body = f"""🛒 New Order Received!
+🆔 Order ID: {order_id}
+👤 Customer: {data.get('customer','Unknown')}
+📞 Phone: {data.get('phone','N/A')}
+📍 Address: {data.get('address','N/A')}
+⏰ Time: {timestamp}
+
+{chr(10).join(order_lines)}
+
+💰 Total: ₹{total_price}"""
+
         with open("orders.log", "a") as f:
             f.write(str(data) + "\n")
 
-        customer = data.get("customer", "Unknown")
-        phone = data.get("phone", "N/A")
-        address = data.get("address", "N/A")
-        items = data.get("items", [])
-
-        # 🧾 Order details
-        total_amount = 0
-        order_lines = []
-        for i in items:
-            name = i.get("item", "Unknown")
-            qty = int(i.get("quantity", 1))
-            rate = float(i.get("rate", 0))
-            subtotal = qty * rate
-            total_amount += subtotal
-            order_lines.append(f"{name} - {qty} x ₹{rate} = ₹{subtotal}")
-
-        # 🕒 Add timestamp + Order ID
-        order_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        order_id = f"ORD{int(datetime.now().timestamp())}"
-
-        body = (
-            f"🛒 New Order Received!\n"
-            f"🆔 Order ID: {order_id}\n"
-            f"👤 Customer: {customer}\n"
-            f"📞 Phone: {phone}\n"
-            f"📍 Address: {address}\n"
-            f"⏰ Time: {order_time}\n\n"
-            + "\n".join(order_lines) +
-            f"\n\n💰 Total: ₹{total_amount}"
-        )
-
         telegram_status = send_telegram_message(body)
 
-        return jsonify({
-            "status": "✅ Order received",
-            "order_id": order_id,
-            "total": total_amount,
-            "telegram": "sent" if telegram_status else "failed"
-        })
+        return jsonify({"status": "✅ Order received", "total": total_price, "telegram": "sent" if telegram_status else "failed"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
