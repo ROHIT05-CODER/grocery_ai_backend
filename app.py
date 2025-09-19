@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import pandas as pd
 import os, requests
+from datetime import datetime
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": ["https://grocery-ai-assistant.vercel.app"]}})
@@ -42,7 +43,7 @@ def get_items():
     results = df[df["Item Name"].astype(str).str.lower().str.contains(query, na=False)]
     return jsonify(results.to_dict(orient="records"))
 
-# 🛒 Place order (log + telegram)
+# 🛒 Place order (log + telegram with details)
 @app.route("/api/order", methods=["POST"])
 def place_order():
     data = request.json or {}
@@ -51,18 +52,50 @@ def place_order():
         with open("orders.log", "a") as f:
             f.write(str(data) + "\n")
 
-        # Telegram message
-        order_text = "\n".join([f"{i['item']} - {i['quantity']}" for i in data.get("items", [])])
-        body = f"🛒 New order from {data.get('customer','Unknown')}:\n\n{order_text}"
+        customer = data.get("customer", "Unknown")
+        phone = data.get("phone", "N/A")
+        address = data.get("address", "N/A")
+        items = data.get("items", [])
+
+        # 🧾 Order details
+        total_amount = 0
+        order_lines = []
+        for i in items:
+            name = i.get("item", "Unknown")
+            qty = int(i.get("quantity", 1))
+            rate = float(i.get("rate", 0))
+            subtotal = qty * rate
+            total_amount += subtotal
+            order_lines.append(f"{name} - {qty} x ₹{rate} = ₹{subtotal}")
+
+        # 🕒 Add timestamp + Order ID
+        order_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        order_id = f"ORD{int(datetime.now().timestamp())}"
+
+        body = (
+            f"🛒 New Order Received!\n"
+            f"🆔 Order ID: {order_id}\n"
+            f"👤 Customer: {customer}\n"
+            f"📞 Phone: {phone}\n"
+            f"📍 Address: {address}\n"
+            f"⏰ Time: {order_time}\n\n"
+            + "\n".join(order_lines) +
+            f"\n\n💰 Total: ₹{total_amount}"
+        )
+
         telegram_status = send_telegram_message(body)
 
-        return jsonify({"status": "✅ Order received", "telegram": "sent" if telegram_status else "failed"})
+        return jsonify({
+            "status": "✅ Order received",
+            "order_id": order_id,
+            "total": total_amount,
+            "telegram": "sent" if telegram_status else "failed"
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 # 🌐 Run server
 if __name__ == "__main__":
-    # Render sets PORT environment variable
     port = int(os.environ.get("PORT", 5000))
     print(f"🚀 Running on port {port}")
     app.run(host="0.0.0.0", port=port)
