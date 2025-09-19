@@ -11,6 +11,7 @@ dataset_path = "grocery_dataset_extended.xlsx"
 try:
     df = pd.read_excel(dataset_path)
     print(f"✅ Dataset loaded: {len(df)} rows")
+    print("📌 Columns:", df.columns.tolist())
 except Exception as e:
     print("❌ Error loading dataset:", e)
     df = pd.DataFrame()
@@ -58,10 +59,10 @@ def place_order():
             price = 0.0
 
             # Match with dataset for price
-            if not df.empty and "Item Name" in df.columns and "Price" in df.columns:
+            if not df.empty and "Item Name" in df.columns and "Price (₹)" in df.columns:
                 match = df[df["Item Name"].astype(str).str.lower() == str(item).lower()]
                 if not match.empty:
-                    price = float(match.iloc[0]["Price"])
+                    price = float(match.iloc[0]["Price (₹)"])
 
             line_total = price * qty
             total_price += line_total
