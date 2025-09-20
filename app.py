@@ -4,7 +4,12 @@ import pandas as pd
 import os, requests, time, random, re
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": ["https://grocery-ai-assistant.vercel.app"]}})
+
+# ✅ CORS setup: allow main domain + any Vercel preview deployments
+CORS(app, resources={r"/api/*": {"origins": [
+    "https://grocery-ai-assistant-d514.vercel.app",
+    r"https://grocery-ai-assistant.*.vercel.app"  # preview deployments
+]}})
 
 # 📊 Load dataset
 dataset_path = "grocery_dataset_extended.xlsx"
