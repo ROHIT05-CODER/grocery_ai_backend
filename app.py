@@ -1,14 +1,15 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import pandas as pd
-import os, requests, time, random, re
+import os, requests, time, random, re, json
 
 app = Flask(__name__)
 
-# ✅ CORS setup: allow main domain + any Vercel preview deployments
+# ✅ CORS setup: allow local + Vercel preview + production
 CORS(app, resources={r"/api/*": {"origins": [
+    "http://localhost:3000",
     "https://grocery-ai-assistant-d514.vercel.app",
-    r"https://grocery-ai-assistant.*.vercel.app"  # preview deployments
+    r"https://grocery-ai-assistant.*.vercel.app"
 ]}})
 
 # 📊 Load dataset
@@ -37,6 +38,18 @@ def send_telegram_message(text):
     except Exception as e:
         print("❌ Telegram exception:", e)
         return False
+
+# 🏠 Root route (fix 404)
+@app.route('/')
+def home():
+    return jsonify({
+        "status": "✅ Grocery AI Backend is live!",
+        "message": "Backend connected successfully!",
+        "endpoints": {
+            "search": "/api/items?q=apple",
+            "order": "/api/order"
+        }
+    })
 
 # 🔎 Search items
 @app.route("/api/items", methods=["GET"])
@@ -107,13 +120,24 @@ def place_order():
 
 💰 Total: ₹{total_price}"""
 
+        # Save order to log file (JSON)
         with open("orders.log", "a") as f:
-            f.write(str(data) + "\n")
+            f.write(json.dumps({
+                "timestamp": timestamp,
+                "order_id": order_id,
+                "customer": customer,
+                "phone": phone,
+                "address": address,
+                "items": items,
+                "total": total_price
+            }) + "\n")
 
+        # Send Telegram message
         telegram_status = send_telegram_message(body)
 
         return jsonify({
             "status": "✅ Order received",
+            "order_id": order_id,
             "total": total_price,
             "telegram": "sent" if telegram_status else "failed"
         })
